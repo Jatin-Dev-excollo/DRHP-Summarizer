@@ -1,0 +1,6 @@
+
+/* We're using tailwind for styling, so App.css can be simplified */
+#root {
+  width: 100%;
+  height: 100%;
+}
