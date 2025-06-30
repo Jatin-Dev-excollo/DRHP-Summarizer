@@ -7,6 +7,11 @@ import { n8nService } from "@/lib/api/n8nService";
 import { sessionService } from "@/lib/api/sessionService";
 import { summaryService } from "@/services/api";
 import { Tooltip } from "@/components/ui/tooltip";
+import {
+  summaryStorageService,
+  Summary,
+} from "@/lib/api/summaryStorageService";
+
 interface SummaryMetadata {
   pageCount?: Number;
   url?: String;
@@ -14,12 +19,14 @@ interface SummaryMetadata {
   duration?: Number;
   name?: String;
 }
+
 interface Summary {
   id: string;
   content: string;
   metadata?: SummaryMetadata;
   updatedAt?: string;
 }
+
 interface SummaryPanelProps {
   isDocumentProcessed: boolean;
   currentDocument: {
@@ -32,6 +39,7 @@ interface SummaryPanelProps {
   selectedSummaryId: string | null;
   onSummarySelect: (summaryId: string | null) => void;
 }
+
 interface SummaryResponse {
   pageCount: Number;
   url: String;
@@ -40,14 +48,17 @@ interface SummaryResponse {
   name: string;
   output: string;
 }
+
 interface N8nResponse {
   response: [SummaryResponse, { output: string }];
   memory_context?: any;
 }
+
 // Utility to strip <style> tags from HTML
 function stripStyleTags(html: string): string {
   return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
 }
+
 export function SummaryPanel({
   isDocumentProcessed,
   currentDocument,
@@ -63,6 +74,25 @@ export function SummaryPanel({
   const [pdfUrlExpiry, setPdfUrlExpiry] = useState<string | null>(null);
   const [sessionData] = useState(() => sessionService.initializeSession());
   const [allSummaries, setAllSummaries] = useState<Summary[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copiedSummaryId, setCopiedSummaryId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    onProcessingChange(isSummarizing);
+  }, [isSummarizing, onProcessingChange]);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   // Fetch all summaries for the document and auto-select latest if none selected
   useEffect(() => {
     const fetchSummaries = async () => {
@@ -93,6 +123,7 @@ export function SummaryPanel({
     fetchSummaries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDocument?.id]);
+
   // When selectedSummaryId or allSummaries changes, update summary display
   useEffect(() => {
     if (!selectedSummaryId && allSummaries.length > 0) {
@@ -124,74 +155,92 @@ export function SummaryPanel({
     setPdfUrl(null);
     setPdfUrlExpiry(null);
   }, [selectedSummaryId, allSummaries, onSummarySelect]);
-  const handleGenerateSummary = async () => {
-    if (!currentDocument) return;
-    setIsGenerating(true);
-    onProcessingChange?.(true);
+
+  const handleNewSummary = async () => {
+    if (!currentDocument?.id) return;
+
+    setIsSummarizing(true);
+    setError(null);
+    onSummarySelect(null);
+
+    // Abort previous request if it exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await n8nService.sendMessage(
-        "Generate RHP Doc Summary",
+        "generate_summary",
         sessionData,
         [],
-        currentDocument.name
+        currentDocument.name,
+        abortControllerRef.current.signal
       );
-      // Check if we have a valid response array
+
+      // Handle n8n-specific error response
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
       if (
-        !response ||
-        !Array.isArray(response.response) ||
-        response.response.length < 2
+        response &&
+        response.response &&
+        Array.isArray(response.response) &&
+        response.response.length === 2
       ) {
-        throw new Error("Invalid response format from the service");
+        const [pdfMetadata, summaryContent] = response.response;
+        if (!summaryContent?.output) {
+          throw new Error("No summary content found in the response");
+        }
+        if (!pdfMetadata?.url) {
+          throw new Error("No PDF URL found in the response");
+        }
+        try {
+          const newSummary = await summaryService.create({
+            title: `Summary for ${currentDocument.name}`,
+            content: summaryContent.output,
+            documentId: currentDocument.id,
+            metadata: {
+              pageCount: pdfMetadata.pageCount,
+              url: pdfMetadata.url,
+              pdfExpiry: pdfMetadata.pdfExpiry,
+              duration: pdfMetadata.duration,
+              name: pdfMetadata.name,
+            },
+          });
+          setSummary(summaryContent.output);
+          setPdfUrl(String(pdfMetadata.url));
+          setPdfUrlExpiry(String(pdfMetadata.pdfExpiry));
+          setSummaryGenerated(true);
+          onSummarySelect(newSummary.id);
+          toast.success("SOP Summary generated and saved successfully");
+          await summaryStorageService.saveSummary(newSummary);
+          setAllSummaries([newSummary, ...allSummaries]);
+        } catch (saveError) {
+          console.error("Error saving summary:", saveError);
+          setSummary(summaryContent.output);
+          setPdfUrl(String(pdfMetadata.url));
+          setPdfUrlExpiry(String(pdfMetadata.pdfExpiry));
+          setSummaryGenerated(true);
+          toast.warning(
+            "Summary generated but failed to save. Please try saving again."
+          );
+        }
+      } else {
+        throw new Error("Invalid summary format received.");
       }
-      // Get the PDF metadata and summary content from the array
-      const [pdfMetadata, summaryContent] = response.response;
-      if (!summaryContent?.output) {
-        throw new Error("No summary content found in the response");
-      }
-      if (!pdfMetadata?.url) {
-        throw new Error("No PDF URL found in the response");
-      }
-      try {
-        const newSummary = await summaryService.create({
-          title: `Summary for ${currentDocument.name}`,
-          content: summaryContent.output,
-          documentId: currentDocument.id,
-          metadata: {
-            pageCount: pdfMetadata.pageCount,
-            url: pdfMetadata.url,
-            pdfExpiry: pdfMetadata.pdfExpiry,
-            duration: pdfMetadata.duration,
-            name: pdfMetadata.name,
-          },
-        });
-        setSummary(summaryContent.output);
-        setPdfUrl(String(pdfMetadata.url));
-        setPdfUrlExpiry(String(pdfMetadata.pdfExpiry));
-        setSummaryGenerated(true);
-        onSummarySelect(newSummary.id);
-        toast.success("SOP Summary generated and saved successfully");
-      } catch (saveError) {
-        console.error("Error saving summary:", saveError);
-        setSummary(summaryContent.output);
-        setPdfUrl(String(pdfMetadata.url));
-        setPdfUrlExpiry(String(pdfMetadata.pdfExpiry));
-        setSummaryGenerated(true);
-        toast.warning(
-          "Summary generated but failed to save. Please try saving again."
-        );
-      }
-    } catch (error) {
-      console.error("Error generating summary:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to generate summary. Please try again."
-      );
+    } catch (err) {
+      console.error("Error generating summary:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to generate summary.";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
-      setIsGenerating(false);
-      onProcessingChange?.(false);
+      setIsSummarizing(false);
     }
   };
+
   const handleCopySummary = () => {
     navigator.clipboard.writeText(summary);
     setIsCopied(true);
@@ -200,6 +249,7 @@ export function SummaryPanel({
       setIsCopied(false);
     }, 3000);
   };
+
   const handleDownload = async () => {
     if (!pdfUrl) {
       toast.error("PDF download URL is not available");
@@ -261,6 +311,7 @@ export function SummaryPanel({
       setPdfUrlExpiry(null);
     }
   };
+
   if (!isDocumentProcessed) {
     return null;
   }
@@ -270,19 +321,19 @@ export function SummaryPanel({
       {/* If summary exists, show buttons at top and summary below */}
       {summaryGenerated ? (
         <>
-          <div className="flex gap-2 mb-4 items-center">
+          <div className="flex gap-2 mb-4 items-center justify-between">
             <Button
-              onClick={handleGenerateSummary}
-              disabled={isGenerating}
-              className="bg-[#3f2306] text-white rounded-md px-6 py-2 font-semibold shadow-none border-none hover:opacity-90 transition-opacity"
+              onClick={handleNewSummary}
+              disabled={isSummarizing}
+              className="bg-[#4B2A06] text-white font-semibold px-10 py-5 rounded-xl shadow-lg text-lg hover:bg-[#3A2004] focus:outline-none transition-colors"
             >
-              {isGenerating ? (
+              {isSummarizing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />
                   Creating New Summary...
                 </>
               ) : (
-                "Generate New Summary"
+                "New Summary"
               )}
             </Button>
             <Button
@@ -292,9 +343,10 @@ export function SummaryPanel({
               disabled={!pdfUrl}
               style={{ minWidth: 40, minHeight: 40 }}
             >
-              <Download className="h-5 w-5 text-[#3f2306]" />
+              <Download className="h-5 w-5 text-[#3F2306]" />
             </Button>
           </div>
+
           <div
             className="flex-1 bg-muted rounded-lg p-4 overflow-y-auto min-h-0 animate-fade-in relative"
             style={{ height: "100%" }}
@@ -353,8 +405,8 @@ export function SummaryPanel({
             Drag and drop the files here
           </p>
           <Button
-            onClick={handleGenerateSummary}
-            disabled={isGenerating}
+            onClick={handleNewSummary}
+            disabled={isSummarizing}
             className="bg-[#3f2306] text-white rounded-md px-6 py-2 font-semibold shadow-none border-none hover:opacity-90 transition-opacity flex items-center gap-2"
           >
             <span className="text-lg">+</span> Generate New Summary

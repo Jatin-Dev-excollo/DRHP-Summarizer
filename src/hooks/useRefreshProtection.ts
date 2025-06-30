@@ -32,6 +32,7 @@ export const useRefreshProtection = (
         right: 0;
         background: rgba(0, 0, 0, 0.8);
         color: white;
+        text-align:center;
         height: 100%;
         padding: 20px;
         text-align: center;

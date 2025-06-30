@@ -19,7 +19,8 @@ export const n8nService = {
     message: string,
     sessionData: SessionData,
     conversationHistory: ConversationMemory[] = [],
-    namespace?: string
+    namespace?: string,
+    signal?: AbortSignal
   ): Promise<N8nResponse> {
     try {
       console.log("Sending message to N8n with namespace:", namespace);
@@ -50,6 +51,7 @@ export const n8nService = {
           headers: {
             "Content-Type": "application/json",
           },
+          signal,
         }
       );
 
@@ -79,6 +81,13 @@ export const n8nService = {
         memory_context: response.data[0]?.memory_context,
       };
     } catch (error) {
+      if (axios.isCancel(error)) {
+        console.log("N8n request canceled:", error.message);
+        return {
+          response: [],
+          error: "Request was canceled by the user.",
+        };
+      }
       console.error("Error sending message to N8n:", error);
       if (axios.isAxiosError(error)) {
         console.error("Response data:", error.response?.data);

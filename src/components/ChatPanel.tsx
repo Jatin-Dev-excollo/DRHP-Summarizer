@@ -16,6 +16,7 @@ import {
   ChatSession,
   ChatMessage,
 } from "@/lib/api/chatStorageService";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -54,6 +55,7 @@ interface ChatPanelProps {
   onChatCreated?: (chatId: string) => void;
   onProcessingChange?: (isProcessing: boolean) => void;
   customStyles?: ChatPanelCustomStyles;
+  newChatTrigger?: number;
 }
 
 // Helper function to format bot messages
@@ -91,6 +93,7 @@ export function ChatPanel({
   onChatCreated,
   onProcessingChange,
   customStyles = {},
+  newChatTrigger,
 }: ChatPanelProps) {
   const [sessionData, setSessionData] = useState<SessionData>(() =>
     sessionService.initializeSession()
@@ -111,6 +114,53 @@ export function ChatPanel({
   const [isTyping, setIsTyping] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  const handleNewChat = async () => {
+    if (!currentDocument) return;
+
+    const newChat = await chatStorageService.createChatForDoc(
+      currentDocument.id,
+      {
+        id: "initial",
+        content: `Hello! I'm your RHP document assistant. Ask a question about ${currentDocument.name} to start a chat.`,
+        isUser: false,
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    const chats = await chatStorageService.getChatsForDoc(currentDocument.id);
+    const reloadedChat = chats.find((c) => c.id === newChat.id);
+
+    if (reloadedChat) {
+      setMessages(
+        reloadedChat.messages.map((m) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+        }))
+      );
+      setCurrentChatId(reloadedChat.id);
+    }
+  };
+
+  useEffect(() => {
+    if (newChatTrigger && newChatTrigger > 0) {
+      handleNewChat();
+    }
+  }, [newChatTrigger]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   // Load chat session when chatId or document changes
   useEffect(() => {
@@ -173,11 +223,11 @@ export function ChatPanel({
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector(
+      const viewport = scrollAreaRef.current.querySelector(
         "[data-radix-scroll-area-viewport]"
       );
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
       }
     }
   }, [messages]);
@@ -230,12 +280,24 @@ export function ChatPanel({
       setIsTyping(true);
       onProcessingChange?.(true);
 
+      // Abort previous request if it exists
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       const response = await n8nService.sendMessage(
         inputValue,
         sessionData,
         conversationMemory,
-        currentDocument.name
+        currentDocument.name,
+        abortControllerRef.current.signal
       );
+
+      // Handle n8n-specific error response
+      if (response.error) {
+        throw new Error(response.error);
+      }
 
       // Update memory context if provided
       if (response.memory_context) {
@@ -249,9 +311,13 @@ export function ChatPanel({
         timestamp: Date.now(),
       };
 
+      const botResponseText = Array.isArray(response.response)
+        ? response.response.join("\n")
+        : response.response;
+
       const newBotMessageMemory: ConversationMemory = {
         type: "bot",
-        text: response.response,
+        text: botResponseText,
         timestamp: Date.now(),
       };
 
@@ -263,7 +329,7 @@ export function ChatPanel({
 
       const aiResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        content: response.response,
+        content: botResponseText,
         isUser: false,
         timestamp: new Date().toISOString(),
       };
@@ -288,9 +354,16 @@ export function ChatPanel({
       }
     } catch (error) {
       console.error("Error in chat:", error);
+      const errorMessageContent =
+        error instanceof Error
+          ? error.message
+          : "Sorry, I encountered an error while processing your message.";
+
+      toast.error(errorMessageContent);
+
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        content: "Sorry, I encountered an error while processing your message.",
+        content: errorMessageContent,
         isUser: false,
         timestamp: new Date().toISOString(),
       };
@@ -334,7 +407,7 @@ export function ChatPanel({
 
   return (
     <div
-      className="flex flex-col h-full pb-16"
+      className="flex flex-col flex-1 min-h-0"
       style={{ background: customStyles.containerBg || undefined }}
     >
       {/* Conditionally render header */}
@@ -348,7 +421,11 @@ export function ChatPanel({
           </span>
         </div>
       )}
-      <ScrollArea className="flex-1 h-[20vh]" style={{ background: customStyles.containerBg || undefined }}>
+      <ScrollArea
+        ref={scrollAreaRef}
+        className="flex-1"
+        style={{ background: customStyles.containerBg || undefined }}
+      >
         <div className="p-4 space-y-4">
           {messages.map((message) => (
             <div
@@ -417,7 +494,7 @@ export function ChatPanel({
           )}
         </div>
       </ScrollArea>
-      <div className="p-4 flex-shrink-0">
+      <div className="p-4 flex-shrink-0 border-t">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -429,7 +506,10 @@ export function ChatPanel({
             ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder={customStyles.inputPlaceholder || "Ask a question about your document..."}
+            placeholder={
+              customStyles.inputPlaceholder ||
+              "Ask a question about your document..."
+            }
             className="flex-1"
             style={{
               background: customStyles.inputBg || undefined,
@@ -455,9 +535,15 @@ export function ChatPanel({
             disabled={!isDocumentProcessed}
           >
             {isTyping ? (
-              <Loader2 className="h-4 w-4 animate-spin" style={{ color: customStyles.sendBtnIcon || undefined }} />
+              <Loader2
+                className="h-4 w-4 animate-spin"
+                style={{ color: customStyles.sendBtnIcon || undefined }}
+              />
             ) : (
-              <Send className="h-4 w-4" style={{ color: customStyles.sendBtnIcon || undefined }} />
+              <Send
+                className="h-4 w-4"
+                style={{ color: customStyles.sendBtnIcon || undefined }}
+              />
             )}
           </Button>
         </form>

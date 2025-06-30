@@ -20,7 +20,7 @@ const LandingPage: React.FC = () => {
       <div className="flex gap-6 mt-2">
         <button
           className="bg-[#4B2A06] text-white font-semibold px-10 py-4 rounded-xl shadow-lg text-lg transition hover:bg-[#3a2004] focus:outline-none"
-          onClick={() => navigate("/login?view=register")}
+          onClick={() => navigate("/login")}
         >
           Get Started
         </button>
