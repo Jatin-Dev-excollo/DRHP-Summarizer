@@ -1,5 +1,5 @@
 import React from "react";
-import { TopNav } from "@/components/TopNav";
+// import { TopNav } from "@/components/TopNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,7 @@ export default function ChatHistoryPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <TopNav lastNamespace={lastNamespace} />
+      {/* <TopNav lastNamespace={lastNamespace} /> */}
       <div className="flex-1 flex flex-col items-center p-8">
         <Card className="w-full max-w-6xl border-border bg-card shadow-lg">
           <CardHeader>

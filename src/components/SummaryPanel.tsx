@@ -338,7 +338,7 @@ export function SummaryPanel({
             </Button>
             <Button
               variant="outline"
-              className="bg-white border border-border rounded-full p-0 w-10 h-10 flex items-center justify-center hover:bg-muted transition-colors text-foreground shadow-none"
+              className="bg-white border border-border rounded-sm p-0 w-10 h-10 flex items-center justify-center hover:bg-muted transition-colors text-foreground shadow-none"
               onClick={handleDownload}
               disabled={!pdfUrl}
               style={{ minWidth: 40, minHeight: 40 }}
@@ -353,7 +353,7 @@ export function SummaryPanel({
           >
             {/* Copy icon at top-right */}
             <button
-              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background shadow hover:bg-muted transition-colors"
+              className="absolute top-3 right-3 z-10 p-2 rounded-sm bg-background shadow hover:bg-muted transition-colors"
               onClick={handleCopySummary}
               title={isCopied ? "Copied!" : "Copy to clipboard"}
             >
@@ -386,10 +386,12 @@ export function SummaryPanel({
               }
             `}</style>
             {/* HTML Content Display */}
-            <div
-              className="summary-content text-foreground/90 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: stripStyleTags(summary) }}
-            />
+            <div className="overflow-x-auto hide-scrollbar">
+              <div
+                className="summary-content text-foreground/90 leading-relaxed min-w-fit"
+                dangerouslySetInnerHTML={{ __html: stripStyleTags(summary) }}
+              />
+            </div>
           </div>
         </>
       ) : (
@@ -407,7 +409,7 @@ export function SummaryPanel({
           <Button
             onClick={handleNewSummary}
             disabled={isSummarizing}
-            className="bg-[#3f2306] text-white rounded-md px-6 py-2 font-semibold shadow-none border-none hover:opacity-90 transition-opacity flex items-center gap-2"
+            className="bg-[#3f2306] text-white rounded-md px-6 py-2 font-semibold shadow-none border-none hover:bg-[#3f2306] flex items-center gap-2"
           >
             <span className="text-lg">+</span> Generate New Summary
           </Button>

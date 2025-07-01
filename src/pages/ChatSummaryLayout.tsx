@@ -19,6 +19,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogOut, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { Navbar } from "@/components/Navbar";
+import { DocumentPopover } from "@/components/ChatPanel";
 
 export default function ChatSummaryLayout() {
   const { namespace } = useParams();
@@ -142,115 +144,7 @@ export default function ChatSummaryLayout() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#FAFAFA]">
-      {/* Header */}
-      <header className="w-full flex items-center h-20 px-0 bg-white border-b border-[#F3F3F3] justify-center relative">
-        {/* Hamburger nav button */}
-        <button
-          className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded hover:bg-[#F3F3F3]"
-          onClick={() => setSidebarOpen(true)}
-        >
-          <svg
-            width="28"
-            height="28"
-            fill="none"
-            stroke="#232323"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            viewBox="0 0 24 24"
-          >
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="18" x2="20" y2="18" />
-          </svg>
-        </button>
-        <span
-          className="absolute left-[46%] top-1/2 -translate-y-1/2 text-2xl font-extrabold text-[#232323] tracking-tight"
-          style={{ fontFamily: "Inter, Arial, sans-serif" }}
-        >
-          PDF Summariser
-        </span>
-        <div className="flex-1" />
-        <div className="flex items-center gap-6 text-[#232323] text-2xl absolute right-12">
-          <span
-            className="cursor-pointer"
-            onClick={() =>
-              navigate(
-                currentDocument
-                  ? `/doc/${currentDocument.namespace || currentDocument.id}`
-                  : "/dashboard"
-              )
-            }
-            title="Chat"
-          >
-            <svg
-              width="24"
-              height="24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="lucide lucide-message-square"
-              viewBox="0 0 24 24"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path>
-            </svg>
-          </span>
-          <span
-            className="cursor-pointer"
-            onClick={() => navigate("/dashboard")}
-            title="Home"
-          >
-            <svg
-              width="24"
-              height="24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="lucide lucide-home"
-              viewBox="0 0 24 24"
-            >
-              <path d="M3 9.5V22h6v-6h6v6h6V9.5L12 3Z"></path>
-            </svg>
-          </span>
-          {/* User Avatar Dropdown */}
-          {isAuthenticated && user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <span className="cursor-pointer">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {getUserInitials(user.email)}
-                    </AvatarFallback>
-                  </Avatar>
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {user.email}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => navigate("/settings")}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => logout()}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-      </header>
+      <Navbar onSidebarOpen={() => setSidebarOpen(true)} />
       {/* Sidebar Drawer Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 flex">
@@ -323,9 +217,12 @@ export default function ChatSummaryLayout() {
                 <line x1="16" x2="8" y1="17" y2="17"></line>
                 <line x1="10" x2="8" y1="9" y2="9"></line>
               </svg>
-              <span className="text-base font-bold text-[#232323]">
-                {currentDocument?.name || currentDocument?.namespace || ""}
-              </span>
+              <DocumentPopover
+                documentId={currentDocument?.id}
+                documentName={
+                  currentDocument?.name || currentDocument?.namespace || ""
+                }
+              />
             </div>
             <ChatPanel
               isDocumentProcessed={true}

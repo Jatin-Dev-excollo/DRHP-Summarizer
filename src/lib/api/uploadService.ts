@@ -13,6 +13,7 @@ export interface UploadResponse {
   namespace?: string;
   status: "processing" | "completed" | "failed";
   message?: string;
+  document?: any;
 }
 
 export interface DocumentStatusResponse {

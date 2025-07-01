@@ -1,7 +1,5 @@
 import React from "react";
 import { useOutletContext, Outlet, useLocation } from "react-router-dom";
-import { TopNav } from "./TopNav";
-import { RecentDocsPanel } from "./RecentDocsPannel";
 import { ProtectedLayoutContext } from "@/pages/ProtectedLayout";
 import { useState } from "react";
 
@@ -57,12 +55,6 @@ export function MainLayout() {
                     >
                       <span className="text-xl">&times;</span>
                     </button>
-                    <div className="flex-1 overflow-y-auto">
-                      <RecentDocsPanel
-                        currentDocument={currentDocument}
-                        onDocumentSelect={handleDocumentSelect}
-                      />
-                    </div>
                   </div>
                 </div>
               )}
@@ -85,12 +77,6 @@ export function MainLayout() {
                   >
                     <span>&#10005;</span>
                   </button>
-                )}
-                {isSidebarOpen && (
-                  <RecentDocsPanel
-                    currentDocument={currentDocument}
-                    onDocumentSelect={handleDocumentSelect}
-                  />
                 )}
               </div>
             </div>

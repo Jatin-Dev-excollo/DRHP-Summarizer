@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api"   ;
+const API_URL = "http://localhost:5000/api"; //import.meta.env.VITE_API_URL ||
 
 // Document Services
 export const documentService = {
@@ -33,6 +33,10 @@ export const documentService = {
     namespace?: string;
     status?: string;
     uploadedAt?: string;
+    file?: any;
+    fileType?: string;
+    microsoftId?: string;
+    userId?: string;
   }) {
     const payload: any = {
       id: document.id,
@@ -41,6 +45,10 @@ export const documentService = {
     if (document.namespace) payload.namespace = document.namespace;
     if (document.status) payload.status = document.status;
     if (document.uploadedAt) payload.uploadedAt = document.uploadedAt;
+    if (document.file) payload.file = document.file;
+    if (document.fileType) payload.fileType = document.fileType;
+    if (document.microsoftId) payload.microsoftId = document.microsoftId;
+    if (document.userId) payload.userId = document.userId;
 
     const response = await axios.post(`${API_URL}/documents`, payload);
     return response.data;

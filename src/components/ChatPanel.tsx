@@ -17,6 +17,12 @@ import {
   ChatMessage,
 } from "@/lib/api/chatStorageService";
 import { toast } from "sonner";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import axios from "axios";
 
 interface Message {
   id: string;
@@ -413,12 +419,9 @@ export function ChatPanel({
       {/* Conditionally render header */}
       {!customStyles.removeHeader && (
         <div className="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
-          <h2 className="font-semibold text-lg text-foreground">
+          <h2 className="font-semibold mt-50 text-lg text-foreground">
             Chat Assistant
           </h2>
-          <span className="text-xs px-2 py-1 rounded-full bg-card text-muted-foreground">
-            {isDocumentProcessed ? "Document Loaded" : "Awaiting Document"}
-          </span>
         </div>
       )}
       <ScrollArea
@@ -549,5 +552,64 @@ export function ChatPanel({
         </form>
       </div>
     </div>
+  );
+}
+
+export function DocumentPopover({
+  documentId,
+  documentName,
+}: {
+  documentId: string;
+  documentName: string;
+}) {
+  const [docDetails, setDocDetails] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchDocDetails = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`/api/documents/${documentId}`);
+      setDocDetails(res.data);
+    } catch (e) {
+      setDocDetails({ text: "Failed to load document details." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Popover
+      onOpenChange={(open) => {
+        if (open && !docDetails && !loading) fetchDocDetails();
+      }}
+    >
+      <PopoverTrigger asChild>
+        <span className="cursor-pointer underline text-base font-semibold text-[#4B2A06] mx-4">
+          {documentName}
+        </span>
+      </PopoverTrigger>
+      <PopoverContent className="max-w-lg">
+        {loading ? (
+          <div>Loading...</div>
+        ) : docDetails ? (
+          <>
+            <div
+              className="mb-2 text-sm text-gray-700"
+              style={{ maxHeight: 300, overflowY: "auto" }}
+            >
+              {docDetails.text || "No text extracted."}
+            </div>
+            <a
+              href={`/api/documents/download/${documentId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-2 px-4 py-2 bg-[#4B2A06] text-white rounded hover:bg-[#3A2004]"
+            >
+              Download PDF
+            </a>
+          </>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
